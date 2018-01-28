@@ -10,6 +10,15 @@ import SpriteKit
 
 class GameScene: SKScene {
     
+    //Müzikler
+    let swapSound = SKAction.playSoundFileNamed("Chomp.wav", waitForCompletion: false)
+    let invalidSwapSound = SKAction.playSoundFileNamed("Error.wav", waitForCompletion: false)
+    let matchSound = SKAction.playSoundFileNamed("Ka-Ching.wav", waitForCompletion: false)
+    let fallingCookieSound = SKAction.playSoundFileNamed("Scrape.wav", waitForCompletion: false)
+    let addCookieSound = SKAction.playSoundFileNamed("Drip.wav", waitForCompletion: false)
+    
+    var swipeHandler: ((Swap) -> ())?
+    
     var level: Level!
     let TileWidth: CGFloat = 32.0
     let TileHeight: CGFloat = 36.0
@@ -17,6 +26,13 @@ class GameScene: SKScene {
     let gameLayer = SKNode()
     let cookiesLayer = SKNode()
     let tilesLayer = SKNode()
+    var selectionSprite = SKSpriteNode()
+    
+    //bunlar playerin dokunduğu ilk cookie ve değiştirmek için seçeceği diğer cookieyi temsil ediyor
+    //?'in sebebi playerimizin swap yapmadığı zamanki durumundan dolayı
+    //seçim yapılmadığında nil olması gerekli
+    private var swipeFromColumn: Int?
+    private var swipeFromRow: Int?
     
     
     
@@ -48,6 +64,11 @@ class GameScene: SKScene {
         gameLayer.addChild(tilesLayer)
         gameLayer.addChild(cookiesLayer)
         
+        
+        //playerimiz henüz seçim yapmadığı için bunların başlangıçta nil olması gerekli
+        swipeFromColumn = nil
+        swipeFromRow = nil
+        
     }
     //????????????????
     func addSprites(for cookies: Set<Cookie>) {
@@ -76,11 +97,60 @@ class GameScene: SKScene {
         }
     }
     
+    //seçilen cookienin highlighted halini görmemizi sağlayacak fonksiyon
+    func showSelectionIndicator(for cookie: Cookie) {
+        if selectionSprite.parent != nil {
+            selectionSprite.removeFromParent()
+        }
+        
+        if let sprite = cookie.sprite {
+            let texture = SKTexture(imageNamed: cookie.cookieType.highlightedSpriteName)
+            selectionSprite.size = CGSize(width: TileWidth, height: TileHeight)
+            selectionSprite.run(SKAction.setTexture(texture))
+            
+            sprite.addChild(selectionSprite)
+            selectionSprite.alpha = 1.0
+            
+        }
+    }
+    
+    func animateInvalidSwap(_ swap: Swap, completion: @escaping () -> ()) {
+        let spriteA = swap.cookieA.sprite!
+        let spriteB = swap.cookieB.sprite!
+        
+        spriteA.zPosition = 100
+        spriteB.zPosition = 90
+        
+        let duration: TimeInterval = 0.2
+        
+        let moveA = SKAction.move(to: spriteB.position, duration: duration)
+        moveA.timingMode = .easeOut
+        
+        let moveB = SKAction.move(to: spriteA.position, duration: duration)
+        moveB.timingMode = .easeOut
+        
+        spriteA.run(SKAction.sequence([moveA, moveB]), completion: completion)
+        spriteB.run(SKAction.sequence([moveB, moveA]))
+        run(invalidSwapSound)
+    }
+    
     //column ve row u CGPoint e çevirir
     func pointFor(column: Int, row: Int) -> CGPoint {
         return CGPoint(
             x: CGFloat(column)*TileWidth + TileWidth/2,
             y: CGFloat(row)*TileHeight + TileHeight/2 )
+    }
+    
+    //pointFor fonksiyonumuz tersi
+    //bu fonksiyon bir cookieslayer dan bir CGPoint alıp bunu bize column ve row number olarak verecek
+    //eğer cookie ızgaramızın dışına çıkartılmaya çalışırsa false olarak geri dönecek
+    func convertPoint(point: CGPoint) -> (success: Bool, column: Int, row: Int) {
+        if point.x >= 0 && point.x < CGFloat(NumColumns)*TileWidth &&
+            point.y >= 0 && point.y < CGFloat(NumRows)*TileHeight {
+            return (true, Int(point.x / TileWidth), Int(point.y / TileHeight))
+        } else {
+            return (false, 0, 0) // grid dışarısı
+        }
     }
     
     private var label : SKLabelNode?
@@ -135,23 +205,133 @@ class GameScene: SKScene {
     }
     
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
-        if let label = self.label {
-            label.run(SKAction.init(named: "Pulse")!, withKey: "fadeInOut")
-        }
         
-        for t in touches { self.touchDown(atPoint: t.location(in: self)) }
+        //Bu dokunulan lokasyonu cookieslayerda bir point e dönüştürecek
+        guard let touch = touches.first else { return }
+        let location = touch.location(in: cookiesLayer)
+        
+        //Burası bize playerin 9x9 grid in içerisine dokunduğu ifade ediyor ve buna yönelik adımlara geçiyor
+        let (success, column, row) = convertPoint(point: location)
+        if success {
+          
+            //Burası bize bir cookie ye dokunulduğunu söylüyor
+            if let cookie = level.cookieAt(column: column, row: row) {
+                
+                showSelectionIndicator(for: cookie)
+                
+                //Swipe hareketinin başlayacağı column ve row u bulduğumuz yer
+                swipeFromColumn = column
+                swipeFromRow = row
+            }
+        }
+       
     }
     
     override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
-        for t in touches { self.touchMoved(toPoint: t.location(in: self)) }
+        
+        //bu tamamen yapılan swapın grid içerisinde olmasını kontrol etmek amacıyla yazılmıştır
+        guard swipeFromColumn != nil else { return }
+        
+        //playerin parmağının nerede olduğuna bakıyoruz aynı touchesBegan da olduğu gibi
+        guard let touch = touches.first else { return }
+        let location = touch.location(in: cookiesLayer)
+        
+        let (success, column, row) = convertPoint(point: location)
+        if success {
+            
+            //Hareketin gerçekleştiği yer ve biz sadece 4 yöne hareket ediyoruz diogonel hareket yok
+            //Bunları unwrap! etmemizin sebebi kesin olarak bir değere sahip olmamız ve başta kontrol mekanizması kullandığımız için
+            var horzDelta = 0, vertDelta = 0
+            if column < swipeFromColumn! { // sola kaydırır
+                horzDelta = -1
+            } else if column > swipeFromColumn! { // sağa kaydırır
+                horzDelta = 1
+            } else if row < swipeFromRow! { // aşağıya kaydırır
+                vertDelta = -1
+            } else if row < swipeFromRow! { // yukarıya kaydırır
+                vertDelta = 1
+            }
+            
+            //Burası ise swap ın gerçekleşmesi için playerin seçilen kareden çıkarması gerektiğini söylüyor
+            if horzDelta != 0 || vertDelta != 0 {
+                trySwap(horizontal: horzDelta, vertical: vertDelta)
+                hideSelectionIndicator()
+                
+                //burayı nil e eşitliyoruz eğer yanlış bir swap yapılırsa eski haline dönsün diye
+                //yanlış swap gridin dışına çıkarılması vb. gibi
+                swipeFromColumn = nil
+            }
+        }
+
+    }
+    
+    //Seçilen spritein fade out ile silinmesini sağlayacak
+    func hideSelectionIndicator () {
+        selectionSprite.run(SKAction.sequence([
+            SKAction.fadeOut(withDuration: 0.3), SKAction.removeFromParent()
+            ]))
+    }
+    
+    func trySwap(horizontal horzDelta: Int, vertical vertDelta: Int) {
+        
+        //Değiştirelecek olan cookienin column ve row unu hesaplıyoruz
+        let toColumn = swipeFromColumn! + horzDelta
+        let toRow = swipeFromRow! + vertDelta
+        
+        //Kontrolümüzü gerçekleştiriyoruz grid dışına çıkılmasın diye
+        guard toColumn >= 0 && toColumn < NumColumns else { return }
+        guard toRow >= 0 && toRow < NumRows else { return }
+        
+        //Seçilen pozisyonda bir cookie olduğuna emin oluyoruz
+        if let toCookie = level.cookieAt(column: toColumn, row: toRow),
+            let fromCookie = level.cookieAt(column: swipeFromColumn!, row: swipeFromRow!) {
+            
+            //Swap ın gerçekleştiği yer
+            if let handler = swipeHandler {
+                let swap = Swap(cookieA: fromCookie, cookieB: toCookie)
+                handler(swap)
+            }
+        }
+    }
+      //Animasyon fonksiyonumuz
+    //kaç saniyede gerçekleşeceğini nasıl bi animasyonla gerçekleşeceğini tanımladık
+    //() -> () ??????
+    func animate(_ swap: Swap, completion: @escaping () -> ()) {
+        let spriteA = swap.cookieA.sprite!
+        let spriteB = swap.cookieB.sprite!
+        
+        spriteA.zPosition = 100
+        spriteB.zPosition = 90
+        
+        let duration: TimeInterval = 0.3
+        
+        let moveA = SKAction.move(to: spriteB.position, duration: duration)
+        moveA.timingMode = .easeOut
+        spriteA.run(moveA, completion: completion)
+        
+        let moveB = SKAction.move(to: spriteA.position, duration: duration)
+        moveB.timingMode = .easeOut
+        spriteB.run(moveB)
+        
+        run(swapSound)
     }
     
     override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
-        for t in touches { self.touchUp(atPoint: t.location(in: self)) }
+        
+        //Player switch yapmadığı zamanda highligted sprite ı geri alıyoruz
+        if selectionSprite.parent != nil && swipeFromColumn != nil {
+            hideSelectionIndicator()
+        }
+
+        //Swap bittikten sonra kullanıcı elini kaldırdığında değerlerimizi nil yapıyoruz
+        swipeFromColumn = nil
+        swipeFromRow = nil
     }
     
     override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
-        for t in touches { self.touchUp(atPoint: t.location(in: self)) }
+        
+        //iptal etmek istedğinde  hiç bişey olsun istemiyoruz
+        touchesEnded(touches, with: event)
     }
     
     

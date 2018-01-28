@@ -12,9 +12,11 @@ let NumColumns = 9
 let NumRows = 9
 
 class Level {
+   
     fileprivate var cookies = Array2D<Cookie>(columns: NumColumns, rows: NumRows)
     private var tiles = Array2D<Tile>(columns: NumColumns, rows: NumRows)
     
+    private var possibleSwaps = Set<Swap>()
    
     
     //JSON ile ilgili kodlar
@@ -53,13 +55,135 @@ class Level {
         return cookies[column,row]
     }
     
+    //İstenmeyen Swaplara kesin çözüm
+    func isPossibleSwap(_ swap: Swap) -> Bool {
+        return possibleSwaps.contains(swap)
+    }
+    
     
     
     //shuffle methodu bizim levelimizi random cookiler ile dolduracak
     
     
     func shuffle() -> Set<Cookie> {
-        return createInitialCokkies()
+        var set: Set<Cookie>
+        repeat {
+            set = createInitialCokkies()
+            detectPossibleSwaps()
+            print("possible swaps: \(possibleSwaps)")
+        } while possibleSwaps.count == 0
+        return set
+    }
+    
+    //Chain Kontrol fonksiyonumuz
+    private func hasChainAt(column: Int, row: Int) -> Bool {
+        let cookieType = cookies[column, row]!.cookieType
+        
+        //Yatay chain var mı kontrol
+        var horzLength = 1
+        
+        //Sol
+        var i = column - 1
+        while i >= 0 && cookies[i, row]?.cookieType == cookieType {
+            i -= 1
+            horzLength += 1
+        }
+        
+        //Sağ
+        i = column + 1
+        while i < NumColumns && cookies[i, row]?.cookieType == cookieType {
+            i += 1
+            horzLength += 1
+        }
+        if horzLength >= 3 { return true }
+        
+        //Dikey chain var mı kontrol
+        var vertLength = 1
+        
+        //Aşağı
+        i = row - 1
+        while i >= 0 && cookies[column, i]?.cookieType == cookieType {
+            i -= 1
+            vertLength += 1
+        }
+        
+        //Yukarı
+        i = row + 1
+        while i < NumRows && cookies[column, i]?.cookieType == cookieType {
+            i += 1
+            vertLength += 1
+        }
+        
+        return vertLength >= 3
+    }
+  
+    //PossibleSwapsları yakaladığımız bölüm burası
+    //Şimdilik sadece öğrenme amaçlı yapılmıştır kullanıcıya gösterilmeyecektir
+    //Ama Debug panelden biz hangilerinin swaplanabilir olduğunu görebileceğiz
+    
+    func detectPossibleSwaps() {
+        var set = Set<Swap>()
+        
+        for row in 0..<NumRows {
+            for column in 0..<NumColumns {
+                if let cookie = cookies[column, row] {
+                    
+                    //Sağdaki cookie ile seçili cookiyi swap yapmamız mümkün mü ?
+                    if column < NumColumns - 1 {
+                        
+                        //Bu noktada bir cookie var mı ?
+                        if let other = cookies[column + 1, row] {
+                            
+                            //Swapla
+                            cookies[column, row] = other
+                            cookies[column + 1, row] = cookie
+                            
+                            //Bulunan cookie chain oluşturdu mu ?
+                            if hasChainAt(column: column + 1, row: row) ||
+                                hasChainAt(column: column, row: row) {
+                                set.insert(Swap(cookieA: cookie, cookieB: other))
+                        }
+                            //Oluşturmadı. Geri Swapla
+                            cookies[column, row] = cookie
+                            cookies[column + 1, row] = other
+                    }
+                    
+                }
+                    
+                    if row < NumRows - 1 {
+                        if let other = cookies[column, row + 1] {
+                            cookies[column, row] = other
+                            cookies[column, row + 1] = cookie
+                            
+                            if hasChainAt(column: column, row: row + 1) ||
+                                hasChainAt(column: column, row: row) {
+                                set.insert(Swap(cookieA: cookie, cookieB: other))
+                            }
+                            
+                             cookies[column, row] = cookie
+                            cookies[column, row + 1] = other
+                        }
+                    }
+                }
+            }
+        }
+        
+        possibleSwaps = set
+    }
+    
+    func performSwap(swap: Swap) {
+        let columnA = swap.cookieA.column
+        let rowA = swap.cookieA.row
+        let columnB = swap.cookieB.column
+        let rowB = swap.cookieB.row
+        
+        cookies[columnA, rowA] = swap.cookieB
+        swap.cookieB.column = columnA
+        swap.cookieB.row = rowA
+        
+        cookies[columnB, rowB] = swap.cookieA
+        swap.cookieA.column = columnB
+        swap.cookieA.row = rowB
     }
     
     private func createInitialCokkies() -> Set<Cookie> {
@@ -71,12 +195,23 @@ class Level {
                 
                 if tiles[column,row] != nil {
                 
-                //Oluşturduğumuz random fonksiyonunu çağırıp randon cookie seçtik
-                let cookieType = CookieType.random()
+                    //Burada yazdıklarımız sayesinde hiç bir zaman 3 tane cookie yan yana gelemeyecek
+                    //Oyun başında ve Sonunda 3 tane yan yana kalmış cookie olmayacak
+                    var cookieType: CookieType
+                    repeat {
+                        cookieType = CookieType.random()
+                    } while (column >= 2 &&
+                    cookies[column - 1, row]?.cookieType == cookieType &&
+                    cookies[column - 2, row]?.cookieType == cookieType) ||
+                    (row >= 2 &&
+                    cookies[column, row - 1]?.cookieType == cookieType &&
+                    cookies[column, row - 2]?.cookieType == cookieType)
                 
                 //bir cookie oluşturup 2Darray e ekler
-                let cookie = Cookie(column: column, row: row, cookieType: cookieType)
-                cookies[column, row] = cookie
+                
+                    let  cookie = Cookie(column: column, row: row, cookieType: cookieType)
+                    cookies[column, row] = cookie
+                
                 
                 //Yeni cookieyi bir kümeye ekler 
                 set.insert(cookie)
