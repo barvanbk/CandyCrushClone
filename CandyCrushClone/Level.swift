@@ -171,6 +171,15 @@ class Level {
         possibleSwaps = set
     }
     
+    //Artık chain oluşturan cookieleri remove zamanı
+    private func removeCookies(chains: Set<Chain>) {
+        for chain in chains {
+            for cookie in chain.cookies {
+                cookies[cookie.column, cookie.row] = nil
+            }
+        }
+    }
+    
     func performSwap(swap: Swap) {
         let columnA = swap.cookieA.column
         let rowA = swap.cookieA.row
@@ -184,6 +193,176 @@ class Level {
         cookies[columnB, rowB] = swap.cookieA
         swap.cookieA.column = columnB
         swap.cookieA.row = rowB
+    }
+    
+    //Yatay chainlerin kontrolünü sağladığımız yer
+    private func detectHorizontalMatches() -> Set<Chain> {
+        
+        //Yeni bir set oluşturuyoruz bunu daha sonra oyun alanından cookieleri silmek için kullanıcaz
+        var set = Set<Chain>()
+        
+        //Satır ve sütunlar arasında loop oluşturuyoruz
+        for row in 0..<NumRows {
+            var column = 0
+            while column < NumColumns-2 {
+                
+                //Boşlukları atlıyoruz
+                if let cookie = cookies[column, row] {
+               let matchType = cookie.cookieType
+                    
+                    //Burda diğer 2 satırın aynı cookieye sahip olup olmadığını kontrol ediyoruz
+                    //Soru işareti kullanarak -2 yi de bi opsiyon olarak kontrolünü sağlıyoruz
+                    if cookies[column + 1, row]?.cookieType == matchType &&
+                        cookies[column + 2, row]?.cookieType == matchType {
+                        
+                        //Burada ise eğer 3ten daha fazla cookie varsa kaderi ne olacak onuda belirliyoruz
+                        //Döngü farklı cookie bulana kadar devam ediyor
+                        let chain = Chain(chainType: .horizontal)
+                        repeat {
+                            chain.add(cookie: cookies[column, row]!)
+                            column += 1
+                        } while column < NumColumns && cookies[column, row]?.cookieType == matchType
+                        
+                        set.insert(chain)
+                        continue
+                }
+            }
+                //Burada ise match olmadığında ve ya boşşa cookieyi geçiyoruz ?
+                column += 1
+        }
+    }
+        return set
+    }
+    
+    //buradada yatay chain  kontrolümüzü gerçekleştiriyoruz
+    private func detectVerticalMatches() -> Set<Chain> {
+        var set = Set<Chain>()
+        
+        for column in 0..<NumColumns {
+            var row = 0
+            while row < NumRows-2 {
+                if let cookie = cookies[column, row] {
+                    let matchType = cookie.cookieType
+                    
+                    if cookies[column, row + 1]?.cookieType == matchType &&
+                        cookies[column, row + 2]?.cookieType == matchType {
+                        let chain = Chain(chainType: .vertical)
+                        repeat {
+                            chain.add(cookie: cookies[column, row]!)
+                            row += 1
+                        } while row < NumRows && cookies[column, row]?.cookieType == matchType
+                        
+                        set.insert(chain)
+                        continue
+                }
+                
+            }
+                row += 1
+        }
+    }
+        return set
+    }
+    
+    
+    //Match olan cookielerden arda kalan boşlukları dolduruyoruz
+    //Boşluğu üstündeki cookieleri aşağı çekerek dolduruyoruz
+    //[[]] bu kullanım dizinin dizisi demektir dizi içinde dizi
+    //Array<Array<Cookie>> şeklindede kullanılabilirmiş.
+    
+    func fillHoles() -> [[Cookie]] {
+        var columns = [[Cookie]]()
+        
+        //Satır ve Sütunlar arasındaki loop
+        for column in 0..<NumColumns {
+            var array = [Cookie]()
+            for row in 0..<NumRows {
+                
+                //Eğer bir tile varsa ve cookie yoksa orası boşluktur
+                if tiles[column, row] != nil && cookies[column, row] == nil {
+                    
+                    //Yukarı doğru boşluğumuzu dolduracak cookieyi arıyoruz
+                    for lookup in (row + 1)..<NumRows {
+                        if let cookie = cookies[column, lookup] {
+                            
+                            //Eğer bir cookie bulduysan onu boşluğa doğru taşı
+                            cookies[column, lookup] = nil
+                            cookies[column, row] = cookie
+                            cookie.row = row
+                            
+                            //Diziye yeni bir cookie ekliyoruz bunun bu kadar aşağıda olma sebebi ise
+                            //Animasyon gecikmesinden dolayı
+                            array.append(cookie)
+                            
+                            //Bir cookie bulduysak tekrar ettirmemize gerek yok o yüzden burda döngüyü kırıyoruz
+                            break
+                        }
+                    }
+                }
+            }
+            
+            //Eğer bir sütunda boşluk yoksa ekleyecek yerimizde yok demektir ?
+            if !array.isEmpty {
+                columns.append(array)
+            }
+        }
+        return columns
+        
+    }
+    
+    //Matchten dolayı eksilen cookielerimizin yerilerine yenilerini ekleme fonksiyonumuz
+    //Nereye lazımsa yukarıdan aşağıya doğru cookielerimizi dolduracak
+    
+    func topUpCookies() -> [[Cookie]] {
+        var columns = [[Cookie]]()
+        var cookieType: CookieType = .unknown
+        
+        for column in 0..<NumColumns {
+            var array = [Cookie]()
+            
+            //Sütunda yukarıdan aşağı şekilde bir loop oluşturuyoruz
+            //while loopmuzun boşluklar bitene kadar bitmeyecek
+            var row = NumRows - 1
+            while row >= 0 && cookies[column, row] == nil {
+                
+                //Cookielerden boşalanlara bakıyoruz sadece
+                //Normal levelimizin sahip olduğu boşlukları ignore ediyoruz
+                if tiles[column, row] != nil {
+                    
+                    //Burda yeni bir cookie oluşturuyoruz
+                    //"Freebie" oluşmasın diye  son cookie yeni cookiye eşit olamaz
+                    //Freebie sanırım havadan gelen matchler
+                    var newCookieType: CookieType
+                    repeat {
+                        newCookieType = CookieType.random()
+                    } while newCookieType == cookieType
+                    cookieType = newCookieType
+                    
+                    //Yeni bir cookie oluşturup bunu diziye ekliyoruz
+                    let cookie = Cookie(column: column, row: row, cookieType: cookieType)
+                    cookies[column, row] = cookie
+                    array.append(cookie)
+                }
+                
+                row -= 1
+            }
+            
+            //Boşluklar bittikten sonra son diziyide ekliyip bitiriyoruz
+            if !array.isEmpty {
+                columns.append(array)
+            }
+        }
+        return columns
+    }
+    
+    //Chainleri remove kısmımız
+    func removeMatches() -> Set<Chain> {
+        let horizontalChains = detectHorizontalMatches()
+        let verticalChains = detectVerticalMatches()
+        
+        removeCookies(chains: horizontalChains)
+        removeCookies(chains: verticalChains)
+        
+        return horizontalChains.union(verticalChains)
     }
     
     private func createInitialCokkies() -> Set<Cookie> {

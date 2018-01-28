@@ -31,6 +31,7 @@
 		40BB0BAB201D78440060A46D /* Mining by Moonlight.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 40BB0BA4201D78350060A46D /* Mining by Moonlight.mp3 */; };
 		40BB0BAC201D784B0060A46D /* Chomp.wav in Resources */ = {isa = PBXBuildFile; fileRef = 40BB0BA6201D78350060A46D /* Chomp.wav */; };
 		40BB0BAD201D784F0060A46D /* Error.wav in Resources */ = {isa = PBXBuildFile; fileRef = 40BB0BA7201D78350060A46D /* Error.wav */; };
+		40BB0BAF201E6FF80060A46D /* Chain.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40BB0BAE201E6FF80060A46D /* Chain.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -60,6 +61,7 @@
 		40BB0BA5201D78350060A46D /* Drip.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = Drip.wav; sourceTree = "<group>"; };
 		40BB0BA6201D78350060A46D /* Chomp.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = Chomp.wav; sourceTree = "<group>"; };
 		40BB0BA7201D78350060A46D /* Error.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = Error.wav; sourceTree = "<group>"; };
+		40BB0BAE201E6FF80060A46D /* Chain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Chain.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -95,6 +97,7 @@
 			children = (
 				408F0A2C20169C760009D501 /* AppDelegate.swift */,
 				408F0A3220169C760009D501 /* GameScene.swift */,
+				40BB0BAE201E6FF80060A46D /* Chain.swift */,
 				40BB0B89201CBE990060A46D /* Swap.swift */,
 				408F0A452016A1700009D501 /* Cookie.swift */,
 				40918A0D2018D4AF00C1891D /* Level.swift */,
@@ -227,6 +230,7 @@
 				408F0A462016A1700009D501 /* Cookie.swift in Sources */,
 				40918A1E201AA59D00C1891D /* Extensions.swift in Sources */,
 				40918A172019704B00C1891D /* Tile.swift in Sources */,
+				40BB0BAF201E6FF80060A46D /* Chain.swift in Sources */,
 				408F0A3520169C760009D501 /* GameViewController.swift in Sources */,
 				408F0A2D20169C760009D501 /* AppDelegate.swift in Sources */,
 				408F0A482018CC890009D501 /* Array2D.swift in Sources */,

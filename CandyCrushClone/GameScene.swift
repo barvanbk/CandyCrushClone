@@ -316,6 +316,107 @@ class GameScene: SKScene {
         run(swapSound)
     }
     
+    //Cookielerin düşüş animasyonu
+    
+    func animateFallingCookies(columns: [[Cookie]], completion: @escaping () -> ()) {
+        
+        //Completion block u bütün animasyonlar bittikten sonra çağırmamız gerekiyor
+        //Düşmesi belirsiz olduğu için bunu hesaplayıp yazıyoruz (Toplamlar Çarpımlar bunun için)
+        var longestDuration: TimeInterval = 0
+        for array in columns {
+            for(idx, cookie) in array.enumerated() {
+                let newPosition = pointFor(column: cookie.column, row: cookie.row)
+                
+                //Animasyonumuzdaki en büyük delay higher up cookieye ait (?)
+                //Bütün cookielerin düşmesinden daha dinamik bi animasyon
+                //Bu hesaplamanın çalışmasının sebebi
+                //fillholes() bize cookielerin düşmesinin garatisini veriyor
+                let delay = 0.05 + 0.15*TimeInterval(idx)
+                
+                //Buradaki hesaplamamız ise 0.1 saniye 1 cookie için mantığıyla
+                let sprite = cookie.sprite!  //Sprite bu noktada her zaman oluşmuş oluyor (!'ın sebebi)
+                let duration = TimeInterval(((sprite.position.y - newPosition.y) / TileHeight) * 0.1)
+                
+                //Burada max animasyonu hesaplıyoruz
+                //Yani animasyonların bitip oyunların başlaması için gerekli tüm süre
+                longestDuration = max(longestDuration, duration + delay)
+                
+                //Burada animasyonu perform ediyoruz bir hareket sesiyle beraber(fallingCookieSound)
+                let moveAction = SKAction.move(to: newPosition, duration: duration)
+                moveAction.timingMode = .easeOut
+                sprite.run(SKAction.sequence([SKAction.wait(forDuration: delay), SKAction.group([moveAction, fallingCookieSound])]))
+                
+            }
+        }
+        
+        //Buradada bütün cookielerin düşüp oyunun başlamasını bekliyoruz
+        run(SKAction.wait(forDuration: longestDuration), completion: completion)
+    }
+    
+    
+    //Match olan cookieler için animasyon fonksiyonumuz 
+    func animateMatchedCookies(for chains: Set<Chain>, completion: @escaping () -> ()) {
+        for chain in chains {
+            for cookie in chain.cookies {
+                if let sprite = cookie.sprite {
+                    if sprite.action(forKey: "removing") == nil {
+                        let scaleAction = SKAction.scale(to: 0.1, duration: 0.3)
+                        scaleAction.timingMode = .easeOut
+                        sprite.run(SKAction.sequence([scaleAction, SKAction.removeFromParent()]), withKey: "removing")
+                    }
+                }
+            }
+        }
+        run(matchSound)
+        run(SKAction.wait(forDuration: 0.3), completion: completion)
+    }
+    
+    //Boşlukları doldurmak için eklenen cookielerinin animasyon fonksiyonu
+    //faliingCookies fonksiyonuyla benzer fakat aynı değil
+    func animateNewCookies(_ columns: [[Cookie]], completion: @escaping () -> ()) {
+        
+        //Bütün animasyon bitmeden oyunu başlatmayacağımız için ilk olarak en uzun zamanı hesaplıyoruz
+        var longesDuration: TimeInterval = 0
+        
+        for array in columns {
+            
+            //Yeni cookie sprite ilk oalrak bu sütunun ilk tile ında başlamalıdır
+            //Bunu bunlmanın en kolay yoluda bu dizideki cookinin bulunduğu ilk satıra bakmaktır
+            //Çünkü çoğunlukla en üstte olacaktır
+            let startRow = array[0].row + 1
+            
+            for (idx, cookie) in array.enumerated() {
+                
+                //Cookie için yeni sprite oluşturuldu
+                let sprite = SKSpriteNode(imageNamed: cookie.cookieType.spriteName)
+                sprite.size = CGSize(width: TileWidth, height: TileHeight)
+                sprite.position = pointFor(column: cookie.column, row: startRow)
+                cookiesLayer.addChild(sprite)
+                cookie.sprite = sprite
+                
+                //Delayimiz cookie ne kadar üstteyse o kadar geç olacağında ona göre hesaplamamızı yapıyoruz
+                let delay = 0.1 + 0.2 * TimeInterval(array.count - idx - 1)
+                
+                //olabilecek en uzun zamanı hesaplıyoruz
+                //Cookie başına 0.1 çarpanını eklemeyi unutmuyoruz
+                let duration = TimeInterval(startRow - cookie.row) * 0.1
+                longesDuration = max(longesDuration, duration + delay)
+                
+                //Burada animasyon işlemimizi gerçekleştiriyoruz düşüyor ve fade in oluyor
+                //Yukarıdan aşağı düşüyormuş gibi
+                let newPositon = pointFor(column: cookie.column, row: cookie.row)
+                let moveAction = SKAction.move(to: newPositon, duration: duration)
+                moveAction.timingMode = .easeOut
+                sprite.alpha = 0
+                sprite.run(SKAction.sequence([SKAction.wait(forDuration: delay), SKAction.group([SKAction.fadeIn(withDuration: 0.05), moveAction, addCookieSound])]))
+                
+            }
+        }
+        
+        //Bütün animasyonun tamamlanmasını bekliyoruz
+        run(SKAction.wait(forDuration: longesDuration), completion: completion)
+    }
+    
     override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
         
         //Player switch yapmadığı zamanda highligted sprite ı geri alıyoruz
